@@ -2,32 +2,32 @@ package dao
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"github.com/and-hom/wwmap/backend/passport"
 	"github.com/and-hom/wwmap/lib/dao/queries"
-	"encoding/json"
 	"github.com/pkg/errors"
-	"fmt"
 )
 
 func NewUserPostgresDao(postgresStorage PostgresStorage) UserDao {
 	return userStorage{
-		PostgresStorage: postgresStorage,
-		createQuery: queries.SqlQuery("user", "create"),
-		getRoleQuery: queries.SqlQuery("user", "get-role-by-ext-id"),
-		setRoleQuery: queries.SqlQuery("user", "set-role"),
-		listQuery: queries.SqlQuery("user", "list"),
-		listByRoleQuery: queries.SqlQuery("user", "list-by-role"),
+		PostgresStorage:   postgresStorage,
+		createQuery:       queries.SqlQuery("user", "create"),
+		getRoleQuery:      queries.SqlQuery("user", "get-role-by-ext-id"),
+		setRoleQuery:      queries.SqlQuery("user", "set-role"),
+		listQuery:         queries.SqlQuery("user", "list"),
+		listByRoleQuery:   queries.SqlQuery("user", "list-by-role"),
 		getBySessionQuery: queries.SqlQuery("user", "find-by-session-id"),
 	}
 }
 
 type userStorage struct {
 	PostgresStorage
-	createQuery     string
-	getRoleQuery    string
-	setRoleQuery    string
-	listQuery       string
-	listByRoleQuery string
+	createQuery       string
+	getRoleQuery      string
+	setRoleQuery      string
+	listQuery         string
+	listByRoleQuery   string
 	getBySessionQuery string
 }
 
@@ -36,7 +36,7 @@ func (this userStorage) CreateIfNotExists(user User) (int64, Role, string, bool,
 	if err != nil {
 		return 0, ANONYMOUS, user.SessionId, false, err
 	}
-	cols, err := this.updateReturningColumns(this.createQuery, ArrayMapper, []interface{}{user.ExtId, string(user.AuthProvider), user.Role, string(userInfo), user.SessionId})
+	cols, err := this.updateReturningColumns(this.createQuery, ArrayMapper, true, []interface{}{user.ExtId, string(user.AuthProvider), user.Role, string(userInfo), user.SessionId})
 	if err != nil {
 		return 0, ANONYMOUS, user.SessionId, false, err
 	}
@@ -65,7 +65,7 @@ func (this userStorage) ListByRole(role Role) ([]User, error) {
 }
 
 func (this userStorage) SetRole(userId int64, role Role) (Role, Role, error) {
-	cols, err := this.updateReturningColumns(this.setRoleQuery, ArrayMapper, []interface{}{userId, role})
+	cols, err := this.updateReturningColumns(this.setRoleQuery, ArrayMapper, true, []interface{}{userId, role})
 	if err != nil {
 		return ANONYMOUS, ANONYMOUS, err
 	}
@@ -77,7 +77,7 @@ func (this userStorage) SetRole(userId int64, role Role) (Role, Role, error) {
 
 func (this userStorage) GetBySession(sessionId string) (User, error) {
 	user, found, err := this.doFindAndReturn(this.getBySessionQuery, userMapper, sessionId)
-	if err!=nil {
+	if err != nil {
 		return User{}, err
 	}
 	if !found {
@@ -91,7 +91,7 @@ func (this userStorage) GetRole(provider AuthProvider, extId string) (Role, erro
 		role := USER
 		return rows.Scan(&role)
 	}, string(provider), extId)
-	if err!=nil {
+	if err != nil {
 		return ANONYMOUS, err
 	}
 	if !found {

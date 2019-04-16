@@ -41,6 +41,13 @@ func (this RiverTitle) GetProperties() map[string]interface{} {
 	return this.Props
 }
 
+func (this RiverTitle) TitleVariants() []string {
+	titleVariants := make([]string, len(this.Aliases)+1)
+	copy(titleVariants, this.Aliases)
+	titleVariants[len(this.Aliases)] = this.Title
+	return titleVariants
+}
+
 type River struct {
 	RiverTitle
 	Description  string       `json:"description"`

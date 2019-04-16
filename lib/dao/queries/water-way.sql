@@ -17,3 +17,10 @@ WITH
 	ways AS (SELECT id,title,path::geography as path FROM waterway),
 	way_ids AS (SELECT id FROM wwpts INNER JOIN ways ON ST_Distance(path,point)<$2 GROUP BY id HAVING count(*)>=least(2, (SELECT count(1)FROM wwpts)))
 SELECT ___select-fields___ FROM ___table___ WHERE id=ANY(SELECT id FROM way_ids)
+
+--@bind-to-river
+WITH
+	wwpts AS (SELECT point::geography as point FROM white_water_rapid WHERE river_id=$1),
+	ways AS (SELECT id,path::geography as path FROM waterway WHERE lower(title) = ANY($2)),
+	way_ids AS (SELECT distinct id FROM wwpts INNER JOIN ways ON ST_Distance(path,point)<$3)
+UPDATE ___table___ SET river_id=$1 WHERE id IN (SELECT id FROM way_ids) RETURNING id

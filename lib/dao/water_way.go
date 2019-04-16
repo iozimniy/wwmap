@@ -6,6 +6,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/and-hom/wwmap/lib/dao/queries"
 	"github.com/and-hom/wwmap/lib/geo"
+	"github.com/lib/pq"
+	"strings"
 )
 
 func NewWaterWayPostgresDao(postgresStorage PostgresStorage) WaterWayDao {
@@ -16,6 +18,7 @@ func NewWaterWayPostgresDao(postgresStorage PostgresStorage) WaterWayDao {
 		listQuery:           queries.SqlQuery("water-way", "list"),
 		unlinkRiverQuery:    queries.SqlQuery("water-way", "unlink-river"),
 		detectForRiverQuery: queries.SqlQuery("water-way", "detect-for-river"),
+		bindToRiverQuery:    queries.SqlQuery("water-way", "bind-to-river"),
 	}
 }
 
@@ -26,6 +29,7 @@ type waterWayStorage struct {
 	listQuery           string
 	unlinkRiverQuery    string
 	detectForRiverQuery string
+	bindToRiverQuery    string
 }
 
 func (this waterWayStorage) AddWaterWays(waterways ...WaterWay) error {
@@ -148,4 +152,13 @@ func (this waterWayStorage) DetectForRiver(riverId int64) ([]WaterWay, error) {
 		return []WaterWay{}, err
 	}
 	return result.([]WaterWay), err
+}
+
+func (this waterWayStorage) BindToRiver(riverId int64, titleVariants []string) ([]int64, error) {
+	titleVariantsLower := make([]string, len(titleVariants))
+	for i := 0; i < len(titleVariants); i++ {
+		titleVariantsLower[i] = strings.ToLower(titleVariants[i])
+	}
+	return this.updateReturningId(this.bindToRiverQuery, ArrayMapper, false,
+		riverId, pq.Array(titleVariantsLower), DETECTION_MIN_DISTANCE_METERS)
 }

@@ -236,13 +236,35 @@ WWMap.prototype.init = function () {
         scaleLine: true
     });
 
+    let measurementToolBtn = new ymaps.control.Button({
+        data: {
+            content: "Расстояния по воде",
+        },
+        options: {
+            maxWidth: 180
+        }
+    });
+    measurementToolBtn.events.add("select", function (e) {
+        t.measurementTool.enable();
+    });
+    measurementToolBtn.events.add("deselect", function (e) {
+        t.measurementTool.disable();
+    });
+    this.yMap.controls.add(measurementToolBtn, {float: 'right'});
+
     this.yMap.events.add('click', function (e) {
-        t.yMap.balloon.close()
+        t.yMap.balloon.close();
+        t.measurementTool.nextSegment();
     });
 
     this.yMap.events.add('boundschange', function (e) {
         setLastPositionZoomType(t.yMap.getCenter(), t.yMap.getZoom(), t.yMap.getType());
-        t.loadRivers(e.get("newBounds"))
+        t.loadRivers(e.get("newBounds"));
+        t.measurementTool.onViewportChanged();
+    });
+
+    this.yMap.events.add('mousemove', function (e) {
+        t.measurementTool.onMouseMoved(e.get('position'));
     });
 
     this.yMap.events.add('typechange', function (e) {
@@ -267,10 +289,13 @@ WWMap.prototype.init = function () {
 
     objectManager.objects.events.add(['click'], function (e) {
         objectManager.objects.balloon.open(e.get('objectId'));
+        t.measurementTool.nextSegment();
     });
 
     this.yMap.geoObjects.add(objectManager);
     this.objectManager = objectManager;
+
+    this.measurementTool = new WWMapMeasurementTool(yMap, objectManager);
 
     this.loadRivers(this.yMap.getBounds())
 };
@@ -394,6 +419,7 @@ function createLegend(wwmap) {
 
     return new Legend()
 }
+
 
 function WWMapPopup(templateDivId, fromTemplates, divId, options) {
     this.divId = divId;

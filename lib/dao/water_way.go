@@ -19,6 +19,8 @@ func NewWaterWayPostgresDao(postgresStorage PostgresStorage) WaterWayDao {
 		unlinkRiverQuery:    queries.SqlQuery("water-way", "unlink-river"),
 		detectForRiverQuery: queries.SqlQuery("water-way", "detect-for-river"),
 		bindToRiverQuery:    queries.SqlQuery("water-way", "bind-to-river"),
+		listByRiverIdsQuery: queries.SqlQuery("water-way", "list-by-river-ids"),
+		listByBboxQuery:     queries.SqlQuery("water-way", "list-by-bbox-simple"),
 	}
 }
 
@@ -30,6 +32,8 @@ type waterWayStorage struct {
 	unlinkRiverQuery    string
 	detectForRiverQuery string
 	bindToRiverQuery    string
+	listByRiverIdsQuery string
+	listByBboxQuery     string
 }
 
 func (this waterWayStorage) AddWaterWays(waterways ...WaterWay) error {
@@ -121,7 +125,10 @@ func scanWaterWay(rows *sql.Rows) (WaterWay, error) {
 	osmId := sql.NullInt64{}
 	riverId := sql.NullInt64{}
 	pathStr := ""
-	rows.Scan(&waterWay.Id, &osmId, &riverId, &waterWay.Title, &waterWay.Type, &waterWay.Comment, &pathStr)
+	err := rows.Scan(&waterWay.Id, &osmId, &riverId, &waterWay.Title, &waterWay.Type, &waterWay.Comment, &pathStr)
+	if err != nil {
+		return WaterWay{}, err
+	}
 	if osmId.Valid {
 		waterWay.OsmId = osmId.Int64
 	}
@@ -129,13 +136,30 @@ func scanWaterWay(rows *sql.Rows) (WaterWay, error) {
 		waterWay.RiverId = riverId.Int64
 	}
 	var path geo.LineString
-	err := json.Unmarshal([]byte(pathStr), &path)
+	err = json.Unmarshal([]byte(pathStr), &path)
 	if err != nil {
-		log.Errorf("Can not parse path \"%s\": %v", path, err)
+		log.Errorf("Can not parse path \"%s\": %v", pathStr, err)
 		return WaterWay{}, err
 	}
 	waterWay.Path = path.GetFlippedPath()
 
+	return waterWay, nil
+}
+
+func scanWaterWaySimpleNonFlipped(rows *sql.Rows) (WaterWaySimple, error) {
+	waterWay := WaterWaySimple{}
+	pathStr := ""
+	err := rows.Scan(&waterWay.Id, &pathStr)
+	if err != nil {
+		return WaterWaySimple{}, err
+	}
+	var path geo.LineString
+	err = json.Unmarshal([]byte(pathStr), &path)
+	if err != nil {
+		log.Errorf("Can not parse path \"%s\": %v", pathStr, err)
+		return WaterWaySimple{}, err
+	}
+	waterWay.Path = path.Coordinates
 	return waterWay, nil
 }
 
@@ -161,4 +185,20 @@ func (this waterWayStorage) BindToRiver(riverId int64, titleVariants []string) (
 	}
 	return this.updateReturningId(this.bindToRiverQuery, ArrayMapper, false,
 		riverId, pq.Array(titleVariantsLower), DETECTION_MIN_DISTANCE_METERS)
+}
+
+func (this waterWayStorage) ListByRiverIds(riverIds ...int64) ([]WaterWay, error) {
+	result, err := this.doFindList(this.listByRiverIdsQuery, scanWaterWay, pq.Array(riverIds))
+	if err != nil {
+		return []WaterWay{}, err
+	}
+	return result.([]WaterWay), err
+}
+
+func (this waterWayStorage) ListByBboxNonFilpped(bbox geo.Bbox) ([]WaterWaySimple, error) {
+	result, err := this.doFindList(this.listByBboxQuery, scanWaterWaySimpleNonFlipped, bbox.Y1, bbox.X1, bbox.Y2, bbox.X2)
+	if err != nil {
+		return []WaterWaySimple{}, err
+	}
+	return result.([]WaterWaySimple), err
 }

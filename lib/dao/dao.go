@@ -65,6 +65,8 @@ type WaterWayDao interface {
 	DetectForRiver(riverId int64) ([]WaterWay, error)
 	UnlinkRiver(id int64, tx interface{}) error
 	BindToRiver(riverId int64, titleVariants []string) ([]int64, error)
+	ListByRiverIds(riverIds ...int64) ([]WaterWay, error)
+	ListByBboxNonFilpped(bbox Bbox) ([]WaterWaySimple, error)
 }
 
 type VoyageReportDao interface {

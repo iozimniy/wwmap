@@ -85,14 +85,18 @@ func (this RiverWithSpotsExt) GetProperties() map[string]interface{} {
 	return this.Props
 }
 
+type WaterWaySimple struct {
+	Id   int64   `json:"id"`
+	Path []Point `json:"path"`
+}
+
 type WaterWay struct {
-	Id      int64   `json:"id"`
-	OsmId   int64   `json:"osm_id"`
-	Title   string  `json:"title"`
-	Type    string  `json:"type"`
-	Path    []Point `json:"path"`
-	RiverId int64   `json:"river_id"`
-	Comment string  `json:"comment"`
+	WaterWaySimple
+	OsmId   int64  `json:"osm_id"`
+	Title   string `json:"title"`
+	Type    string `json:"type"`
+	RiverId int64  `json:"river_id"`
+	Comment string `json:"comment"`
 }
 
 const EXPORT_PROP_PREFIX = "export_"

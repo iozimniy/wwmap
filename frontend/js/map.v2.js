@@ -236,31 +236,18 @@ WWMap.prototype.init = function () {
         scaleLine: true
     });
 
-    let measurementToolBtn = new ymaps.control.Button({
-        data: {
-            content: "Расстояния по воде",
-        },
-        options: {
-            maxWidth: 180
-        }
-    });
-    measurementToolBtn.events.add("select", function (e) {
-        t.measurementTool.enable();
-    });
-    measurementToolBtn.events.add("deselect", function (e) {
-        t.measurementTool.disable();
-    });
-    this.yMap.controls.add(measurementToolBtn, {float: 'right'});
-
     this.yMap.events.add('click', function (e) {
         t.yMap.balloon.close();
         t.measurementTool.nextSegment();
+    });
+    this.yMap.events.add('contextmenu', function (e) {
+        t.measurementTool.showHideLastMarker();
     });
 
     this.yMap.events.add('boundschange', function (e) {
         setLastPositionZoomType(t.yMap.getCenter(), t.yMap.getZoom(), t.yMap.getType());
         t.loadRivers(e.get("newBounds"));
-        t.measurementTool.onViewportChanged();
+        t.measurementTool.onViewportChanged(t.yMap.getBounds());
     });
 
     this.yMap.events.add('mousemove', function (e) {
@@ -291,11 +278,16 @@ WWMap.prototype.init = function () {
         objectManager.objects.balloon.open(e.get('objectId'));
         t.measurementTool.nextSegment();
     });
+    objectManager.objects.events.add('mousemove', function (e) {
+        t.measurementTool.onMouseMoved(e.get('position'));
+    });
 
     this.yMap.geoObjects.add(objectManager);
     this.objectManager = objectManager;
 
-    this.measurementTool = new WWMapMeasurementTool(yMap, objectManager);
+    this.measurementTool = new WWMapMeasurementTool(yMap, objectManager, backendApiBase);
+    this.yMap.controls.add(createMeasurementToolControl(this.measurementTool), {
+    });
 
     this.loadRivers(this.yMap.getBounds())
 };

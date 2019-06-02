@@ -238,7 +238,7 @@ WWMap.prototype.init = function () {
 
     this.yMap.events.add('click', function (e) {
         t.yMap.balloon.close();
-        t.measurementTool.nextSegment();
+        t.measurementTool.pushEmptySegment();
     });
     this.yMap.events.add('contextmenu', function (e) {
         t.measurementTool.showHideLastMarker();
@@ -276,7 +276,7 @@ WWMap.prototype.init = function () {
 
     objectManager.objects.events.add(['click'], function (e) {
         objectManager.objects.balloon.open(e.get('objectId'));
-        t.measurementTool.nextSegment();
+        t.measurementTool.pushEmptySegment();
     });
     objectManager.objects.events.add('mousemove', function (e) {
         t.measurementTool.onMouseMoved(e.get('position'));

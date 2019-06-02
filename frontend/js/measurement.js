@@ -37,7 +37,7 @@ function createMeasurementToolControl(measurementTool) {
             var measureDeleteBtn = $('.wwmap-measure-delete-btn');
             var t = this;
             measureOnOffBtn.bind('click', function (e) {
-                if(measurementTool.enabled) {
+                if (measurementTool.enabled) {
                     measureOnOffBtn.removeClass("wwmap-measure-btn-pressed");
                     measurementTool.disable();
                     measureDownloadBtn.css('display', 'none');
@@ -125,7 +125,7 @@ function WWMapMeasurementTool(map, objectManager, apiBase) {
 
     this.reset();
     this.segments[0].marker.events.add('click', function () {
-        t.nextSegment();
+        t.pushEmptySegment();
     });
 
     $(document).keyup(function (e) {
@@ -159,16 +159,27 @@ WWMapMeasurementTool.prototype.createSlice = function (coords) {
     return slice = new ymaps.Polyline(coords, {}, {
         strokeColor: "#FF0000",
         strokeWidth: 5,
-        // lineStringOverlay: "RullerLineOverlay",
     });
 };
 
-WWMapMeasurementTool.prototype.createMarker = function () {
-    return new ymaps.Placemark(this.pos, {
+WWMapMeasurementTool.prototype.createMarker = function (text) {
+    let marker = new ymaps.Placemark(this.pos, {
         iconContent: ""
     }, {
         preset: 'islands#redStretchyIcon',
     });
+    let t = this;
+    marker.events.add('click', function () {
+        t.pushEmptySegment();
+    });
+    marker.events.add('contextmenu', function (e) {
+        t.showHideLastMarker();
+    });
+    marker.events.add('mousemove', function (e) {
+        t.mouseToCoords(e.get('position'));
+    });
+    marker.properties.set("iconContent", text);
+    return marker;
 };
 
 WWMapMeasurementTool.prototype.enable = function () {
@@ -209,17 +220,7 @@ WWMapMeasurementTool.prototype.showHideLastMarker = function () {
     }
 };
 
-WWMapMeasurementTool.prototype.nextSegment = function () {
-    let t = this;
-    let marker = this.createMarker();
-    marker.properties.set("iconContent", this.distanceText(this.distance));
-    marker.events.add('click', function () {
-        t.nextSegment();
-    });
-    marker.events.add('contextmenu', function (e) {
-        t.showHideLastMarker();
-    });
-
+WWMapMeasurementTool.prototype.pushEmptySegment = function () {
     if (this.segments.length > 1) {
         this.fixedPath = this.fixedPath.concat(this.segments[this.segments.length - 1].slice.geometry.getCoordinates());
         this.path.geometry.setCoordinates(this.fixedPath);
@@ -228,10 +229,13 @@ WWMapMeasurementTool.prototype.nextSegment = function () {
         this.map.geoObjects.remove(this.path);
     }
 
+    let marker = this.createMarker(this.distanceText(this.distance));
     let slice = this.createSlice([this.pos, this.pos]);
+
     this.segments.push({
         marker: marker,
         slice: slice,
+        dist: 0,
         lineId: 0,
     });
     this.map.geoObjects.add(marker);
@@ -248,6 +252,7 @@ WWMapMeasurementTool.prototype.reset = function () {
             preset: 'islands#redIcon',
         }),
         slice: null,
+        dist: 0,
         lineId: 0,
     }];
     if (this.enabled) {
@@ -264,13 +269,14 @@ WWMapMeasurementTool.prototype.onViewportChanged = function () {
 };
 
 sensitivity_px = 2;
+carry_dist_meters = 100;
 
 WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
     if (!this.showLastMarker || !this.enabled || this.trackStorage.rivers.length == 0 && !(this.segments.length > 0 && this.currentLine)) {
         return
     }
 
-    if (this.pixelPos && (
+    if (this.pixelPos && pixelPos && (
         Math.abs(this.pixelPos[0] - pixelPos[0]) < sensitivity_px
         || Math.abs(this.pixelPos[1] - pixelPos[1]) <= sensitivity_px)) {
         return;
@@ -283,14 +289,16 @@ WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
     let minDst = nearestRiver
         ? turf.pointToLineDistance(cursorPosFlipped, turf.lineString(nearestRiver.path), {units: 'meters'})
         : Number.MAX_SAFE_INTEGER;
-    for (let i = 0; i < this.trackStorage.rivers.length; i++) {
-        let dst = turf.pointToLineDistance(cursorPosFlipped, turf.lineString(this.trackStorage.rivers[i].path), {units: 'meters'});
-        if (minDst > dst) {
-            minDst = dst;
-            nearestRiver = this.trackStorage.rivers[i];
+    if (!nearestRiver || minDst > carry_dist_meters) {
+        for (let i = 0; i < this.trackStorage.rivers.length; i++) {
+            let dst = turf.pointToLineDistance(cursorPosFlipped, turf.lineString(this.trackStorage.rivers[i].path), {units: 'meters'});
+            if (minDst > dst) {
+                minDst = dst;
+                nearestRiver = this.trackStorage.rivers[i];
+            }
         }
+        this.currentLine = nearestRiver;
     }
-    this.currentLine = nearestRiver;
 
     let nearestRiverLineString = turf.lineString(nearestRiver.path);
     let nearestPointFlipped = turf.nearestPointOnLine(nearestRiverLineString, cursorPosFlipped, {units: 'meters'});
@@ -298,43 +306,36 @@ WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
     this.pos = flip(nearestPointFlipped.geometry.coordinates);
 
     let segment = this.segments[this.segments.length - 1];
-    let marker = segment.marker;
-    marker.geometry.setCoordinates(this.pos);
+    segment.marker.geometry.setCoordinates(this.pos);
     segment.lineId = nearestRiver.id;
 
-    if (this.segments.length > 1) {
-        let prevSegment = this.segments[this.segments.length - 2];
-        let prevmarker = prevSegment.marker;
-        let lastSegmentGeom = turf.flip(prevSegment.lineId == nearestRiver.id
-            ? turf.lineSlice(turf.flip(turf.point(prevmarker.geometry.getCoordinates())), nearestPointFlipped.geometry, nearestRiverLineString)
-            : turf.lineString([flip(prevmarker.geometry.getCoordinates()), nearestPointFlipped.geometry.coordinates]));
-
-        let lastSegmentGeomCoords = lastSegmentGeom.geometry.coordinates;
-        let firstP = lastSegmentGeomCoords[0];
-        let lastP = lastSegmentGeomCoords[lastSegmentGeomCoords.length - 1];
-        if (turf.distance(flip(firstP), nearestPointFlipped.geometry.coordinates, {units: 'meters'}) < turf.distance(flip(lastP), nearestPointFlipped.geometry.coordinates, {units: 'meters'})) {
-            lastSegmentGeomCoords = lastSegmentGeomCoords.reverse();
-        }
-
-        let lastSegmentCoordsFlipped = flipLine(lastSegmentGeomCoords);
-        console.log(lastSegmentGeomCoords, lastSegmentCoordsFlipped)
-        segment.slice.geometry.setCoordinates(lastSegmentGeomCoords);
-
-        let dist = 0;
-
-        this.segments.forEach(function (s) {
-            if (s.slice) {
-                dist += turf.length(turf.lineString(s.slice.geometry.getCoordinates()), {units: 'meters'});
-            }
-        });
-
-        this.path.geometry.setCoordinates(this.fixedPath.concat(lastSegmentGeomCoords));
-        this.addIfMissing(this.path);
-        this.distance = dist;
-        marker.properties.set("iconContent", this.distanceText(this.distance));
+    if (this.segments.length < 2) {
+        return;
     }
 
-    this.currentLine = nearestRiver;
+    let prevSegment = this.segments[this.segments.length - 2];
+    let currentSegmentGeom = turf.flip(prevSegment.lineId == nearestRiver.id
+        ? turf.lineSlice(turf.flip(turf.point(prevSegment.marker.geometry.getCoordinates())), nearestPointFlipped.geometry, nearestRiverLineString)
+        : turf.lineString([flip(prevSegment.marker.geometry.getCoordinates()), nearestPointFlipped.geometry.coordinates]));
+
+    let currentSegmentGeomCoords = currentSegmentGeom.geometry.coordinates;
+    if (turf.distance(flip(currentSegmentGeomCoords[0]), nearestPointFlipped.geometry.coordinates, {units: 'meters'}) < 1) {
+        currentSegmentGeomCoords = currentSegmentGeomCoords.reverse();
+    }
+
+    segment.slice.geometry.setCoordinates(currentSegmentGeomCoords);
+    segment.dist = turf.length(currentSegmentGeom, {units: 'meters'});
+
+    let dist = this.segments.reduce(function (a, s) {
+        return a + s.dist
+    }, 0);
+
+    this.path.geometry.setCoordinates(this.fixedPath.concat(currentSegmentGeomCoords));
+    this.addIfMissing(this.path);
+    this.distance = dist;
+
+    segment.marker.properties.set("iconContent", this.distanceText(this.distance));
+
 };
 
 function flip(p) {
@@ -365,199 +366,3 @@ WWMapMeasurementTool.prototype.mouseToCoords = function (pixelPos) {
     let globalPxPos = this.map.converter.pageToGlobal(pixelPos);
     return this.map.options.get('projection').fromGlobalPixels(globalPxPos, this.map.getZoom());
 };
-
-/*
-ymaps.modules.define("overlay.RullerLine", [
-    'overlay.Polyline',
-    'overlay.Circle',
-    'util.extend',
-    'event.Manager',
-    'option.Manager',
-    'Event',
-    'geometry.pixel.LineString',
-    'geometry.pixel.Circle'
-], function (provide, PolylineOverlay, CircleOverlay, extend, EventManager, OptionManager, Event, PolylineGeometry, CircleGeometry) {
-    var domEvents = [
-            'click',
-            'contextmenu',
-            'dblclick',
-            'mousedown',
-            'mouseenter',
-            'mouseleave',
-            'mousemove',
-            'mouseup',
-            'multitouchend',
-            'multitouchmove',
-            'multitouchstart',
-            'wheel'
-        ],
-
-        RullerLineOverlay = function (pixelGeometry, data, options) {
-            this.events = new EventManager();
-            this.options = new OptionManager(options);
-            this._map = null;
-            this._data = data;
-            this._geometry = pixelGeometry;
-            this._line = null;
-            this._labels = null;
-        };
-
-    RullerLineOverlay.prototype = extend(RullerLineOverlay.prototype, {
-        getData: function () {
-            return this._data;
-        },
-
-        setData: function (data) {
-            if (this._data != data) {
-                var oldData = this._data;
-                this._data = data;
-                this.events.fire('datachange', {
-                    oldData: oldData,
-                    newData: data
-                });
-            }
-        },
-
-        getMap: function () {
-            return this._map;
-        },
-
-        setMap: function (map) {
-            if (this._map != map) {
-                var oldMap = this._map;
-                if (!map) {
-                    this._onRemoveFromMap();
-                }
-                this._map = map;
-                if (map) {
-                    this._onAddToMap();
-                }
-                this.events.fire('mapchange', {
-                    oldMap: oldMap,
-                    newMap: map
-                });
-            }
-        },
-
-        setGeometry: function (geometry) {
-            if (this._geometry != geometry) {
-                var oldGeometry = geometry;
-                this._geometry = geometry;
-
-                if (this.getMap() && geometry) {
-                    this._rebuild();
-                }
-                this.events.fire('geometrychange', {
-                    oldGeometry: oldGeometry,
-                    newGeometry: geometry
-                });
-            }
-        },
-
-        getGeometry: function () {
-            return this._geometry;
-        },
-
-        getShape: function () {
-            return null;
-        },
-
-        isEmpty: function () {
-            return false;
-        },
-
-        _rebuild: function () {
-            this._onRemoveFromMap();
-            this._onAddToMap();
-        },
-
-        _onAddToMap: function () {
-            let path = this.getGeometry().getCoordinates();
-
-            let geoPath = this.getData().geometry.getCoordinates();
-            let pathLineString = turf.flip(turf.lineString(geoPath));
-            let lengthMeters = turf.length(pathLineString, {units: 'meters'});
-
-            if (lengthMeters == 0) {
-                return;
-            }
-            let map = this.getMap();
-
-            this._line = new PolylineOverlay(new PolylineGeometry(path));
-            this._startOverlayListening();
-
-            this._line.options.set("strokeWidth", 3);
-            this._line.options.set("fill", false);
-
-            this._line.options.setParent(this.options);
-            this._line.setMap(map);
-
-            this._labels = [];
-            let p = path[0];
-            let label0 = new CircleOverlay(new CircleGeometry(p, 4));
-
-            label0.options.setParent(this.options);
-            label0.setMap(map);
-
-            this._labels.push(label0);
-            for (let i = 1; i < lengthMeters / 1000; i++) {
-                let p_i = turf.flip(turf.along(pathLineString, i * 1000, {units: 'meters'}));
-                let p_i_coords = p_i.geometry.coordinates;
-                let p_i_pixel_coords = map.options.get('projection').toGlobalPixels(p_i_coords, map.getZoom());
-                let label = new CircleOverlay(new CircleGeometry(p_i_pixel_coords, 4));
-
-                label.options.setParent(this.options);
-                label.setMap(map);
-
-                this._labels.push(label);
-            }
-        },
-
-        _onRemoveFromMap: function () {
-            if (this._line) {
-                this._line.setMap(null);
-                this._line.options.setParent(null);
-            }
-            if (this._labels) {
-                this._labels.forEach(function (label) {
-                    label.setMap(null);
-                    label.options.setParent(null);
-                })
-            }
-            this._stopOverlayListening();
-        },
-
-        _startOverlayListening: function () {
-            if (this._line) {
-                this._line.events.add(domEvents, this._onDomEvent, this);
-            }
-            if (this._labels) {
-                let t = this;
-                this._labels.forEach(function (label) {
-                    label.events.add(domEvents, t._onDomEvent, t);
-                })
-            }
-        },
-
-        _stopOverlayListening: function () {
-            if (this._line) {
-                this._line.events.remove(domEvents, this._onDomEvent, this);
-            }
-            if (this._labels) {
-                let t = this;
-                this._labels.forEach(function (label) {
-                    label.events.remove(domEvents, t._onDomEvent, t);
-                })
-            }
-        },
-
-        _onDomEvent: function (e) {
-            this.events.fire(e.get('type'), new Event({target: this}, e));
-        },
-
-    });
-
-    provide(RullerLineOverlay);
-});
-
-*/

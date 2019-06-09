@@ -135,13 +135,17 @@ function WWMapMeasurementTool(map, objectManager, apiBase) {
     });
 }
 
-WWMapMeasurementTool.prototype.removeLastSegment = function () {
+WWMapMeasurementTool.prototype.removeLastSegment = function (n) {
+    if (!n) {
+        n = 1;
+    }
     if (this.segments.length > 1) {
-        let lastSegment = this.segments[this.segments.length - 1];
-        let prevSegment = this.segments[this.segments.length - 2];
-        this.segments.splice(-1, 1);
-        this.map.geoObjects.remove(lastSegment.marker);
+        let prevSegment = this.segments[this.segments.length - n - 1];
+        for (i = 0; i < n; i++) {
+            this.map.geoObjects.remove(this.segments[this.segments.length - i - 1].marker);
+        }
         this.pos = prevSegment.marker.geometry.coordinates;
+        this.segments.splice(-n, n);
 
         this.fixedPath = [];
         for (let i = 1; i < this.segments.length - 1; i++) {
@@ -220,7 +224,7 @@ WWMapMeasurementTool.prototype.showHideLastMarker = function () {
     }
 };
 
-WWMapMeasurementTool.prototype.pushEmptySegment = function () {
+WWMapMeasurementTool.prototype.pushEmptySegment = function (noMarker) {
     if (this.segments.length > 1) {
         this.fixedPath = this.fixedPath.concat(this.segments[this.segments.length - 1].slice.geometry.getCoordinates());
         this.path.geometry.setCoordinates(this.fixedPath);
@@ -232,13 +236,17 @@ WWMapMeasurementTool.prototype.pushEmptySegment = function () {
     let marker = this.createMarker(this.distanceText(this.distance));
     let slice = this.createSlice([this.pos, this.pos]);
 
-    this.segments.push({
+    let segment = {
         marker: marker,
         slice: slice,
         dist: 0,
         lineId: 0,
-    });
-    this.map.geoObjects.add(marker);
+    };
+    this.segments.push(segment);
+    if (!noMarker) {
+        this.map.geoObjects.add(marker);
+    }
+    return segment;
 };
 
 
@@ -269,10 +277,9 @@ WWMapMeasurementTool.prototype.onViewportChanged = function () {
 };
 
 sensitivity_px = 2;
-carry_dist_meters = 100;
 
 WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
-    if (!this.showLastMarker || !this.enabled || this.trackStorage.rivers.length == 0 && !(this.segments.length > 0 && this.currentLine)) {
+    if (!pixelPos || !this.showLastMarker || !this.enabled || this.trackStorage.rivers.length == 0 && !(this.segments.length > 0 && this.currentLine)) {
         return
     }
 
@@ -289,7 +296,8 @@ WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
     let minDst = nearestRiver
         ? turf.pointToLineDistance(cursorPosFlipped, turf.lineString(nearestRiver.path), {units: 'meters'})
         : Number.MAX_SAFE_INTEGER;
-    if (!nearestRiver || minDst > carry_dist_meters) {
+    let epsilon_m = 100;
+    if (!nearestRiver || minDst > epsilon_m) {
         for (let i = 0; i < this.trackStorage.rivers.length; i++) {
             let dst = turf.pointToLineDistance(cursorPosFlipped, turf.lineString(this.trackStorage.rivers[i].path), {units: 'meters'});
             if (minDst > dst) {
@@ -306,6 +314,35 @@ WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
     this.pos = flip(nearestPointFlipped.geometry.coordinates);
 
     let segment = this.segments[this.segments.length - 1];
+    if (segment.lineId != nearestRiver.id && segment.lineId != 0 && this.segments.length > 1) {
+        if (this.segments.length > 2
+            && this.segments[this.segments.length - 1].dist < epsilon_m
+            && this.segments[this.segments.length - 2].lineId != nearestRiver.id) {
+            console.log("rm", this.segments[0])
+            console.log("rm", this.segments[1])
+            console.log("rm", this.segments[2])
+            this.removeLastSegment(2);
+        } else {
+            let p0flipped = this.segments[this.segments.length - 2].marker.geometry.getCoordinates();
+            let p1flipped = segment.marker.geometry.getCoordinates();
+            let p2geom = turf.nearestPointOnLine(nearestRiverLineString, flip(p1flipped), {units: 'meters'});
+            let p2 = p2geom.geometry.coordinates;
+            let p2flipped = flip(p2);
+
+            let d = turf.distance(p1flipped, p2flipped, {units: 'meters'});
+            console.log(d, epsilon_m)
+            if (d < epsilon_m) {
+                this.map.geoObjects.remove(segment.marker);
+                segment = this.pushEmptySegment(true);
+                segment.slice.geometry.setCoordinates([p1flipped, p2flipped]);
+                segment.lineId = nearestRiver.id;
+                segment.marker.geometry.setCoordinates(p2flipped);
+                this.pos = p2;
+
+                segment = this.pushEmptySegment();
+            }
+        }
+    }
     segment.marker.geometry.setCoordinates(this.pos);
     segment.lineId = nearestRiver.id;
 
@@ -314,17 +351,21 @@ WWMapMeasurementTool.prototype.onMouseMoved = function (pixelPos) {
     }
 
     let prevSegment = this.segments[this.segments.length - 2];
-    let currentSegmentGeom = turf.flip(prevSegment.lineId == nearestRiver.id
-        ? turf.lineSlice(turf.flip(turf.point(prevSegment.marker.geometry.getCoordinates())), nearestPointFlipped.geometry, nearestRiverLineString)
-        : turf.lineString([flip(prevSegment.marker.geometry.getCoordinates()), nearestPointFlipped.geometry.coordinates]));
+    let prevSegmentGeom;
+    if (prevSegment.lineId == nearestRiver.id) {
+        let prevSegEndPoint = turf.flip(turf.point(prevSegment.marker.geometry.getCoordinates()));
+        prevSegmentGeom = turf.flip(turf.lineSlice(prevSegEndPoint, nearestPointFlipped.geometry, nearestRiverLineString));
+    } else {
+        prevSegmentGeom = turf.flip(turf.lineString([flip(prevSegment.marker.geometry.getCoordinates()), nearestPointFlipped.geometry.coordinates]));
+    }
 
-    let currentSegmentGeomCoords = currentSegmentGeom.geometry.coordinates;
+    let currentSegmentGeomCoords = prevSegmentGeom.geometry.coordinates;
     if (turf.distance(flip(currentSegmentGeomCoords[0]), nearestPointFlipped.geometry.coordinates, {units: 'meters'}) < 1) {
         currentSegmentGeomCoords = currentSegmentGeomCoords.reverse();
     }
 
     segment.slice.geometry.setCoordinates(currentSegmentGeomCoords);
-    segment.dist = turf.length(currentSegmentGeom, {units: 'meters'});
+    segment.dist = turf.length(prevSegmentGeom, {units: 'meters'});
 
     let dist = this.segments.reduce(function (a, s) {
         return a + s.dist

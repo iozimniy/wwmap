@@ -26,7 +26,7 @@ function createMeasurementToolControl(measurementTool) {
             var content = '<div class="wwmap-route-control">' +
                 '<button class="ymaps-2-1-73-float-button-text, wwmap-measure-btn">Расстояния по воде<img style="height:24px"/></button>' +
                 '<button class="ymaps-2-1-73-float-button-text, wwmap-measure-download-btn" style="display: none;" title="Скачать GPX"><img style="height:24px" src="img/download.png"/></button>' +
-                '<button class="ymaps-2-1-73-float-button-text, wwmap-measure-revert-btn" style="display: none;" title="Удалить последнюю точку"><img style="height:24px" src="img/revert.png"/></button>' +
+                '<button class="ymaps-2-1-73-float-button-text, wwmap-measure-revert-btn" style="display: none;" title="Удалить последнюю точку (Esc)"><img style="height:24px" src="img/revert.png"/></button>' +
                 '<button class="ymaps-2-1-73-float-button-text, wwmap-measure-delete-btn" style="display: none;" title="Очистить трек"><img style="height:24px" src="img/del.png"/></button>' +
                 '</div>';
             this._$content = $(content).appendTo(parentDomContainer);
@@ -253,8 +253,16 @@ WWMapMeasurementTool.prototype.pushEmptySegment = function (noMarker) {
 WWMapMeasurementTool.prototype.reset = function () {
     let t = this;
     this.segments.forEach(function (m) {
-        t.map.geoObjects.remove(m.marker);
+        if (m.marker) {
+            t.map.geoObjects.remove(m.marker);
+        }
+        if (m.slice) {
+            t.map.geoObjects.remove(m.slice);
+        }
     });
+    if (this.path) {
+        t.map.geoObjects.remove(this.path);
+    }
     this.segments = [{
         marker: new ymaps.Placemark(this.pos, {}, {
             preset: 'islands#redIcon',

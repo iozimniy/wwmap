@@ -1,3 +1,15 @@
+jQuery.loadScript = function (url, callback) {
+    jQuery.ajax({
+        url: url,
+        dataType: 'script',
+        success: callback,
+        async: true
+    });
+};
+$.loadScript('https://wwmap.ru/js/turf.min.js');
+$.loadScript('https://wwmap.ru/js/measurement.js');
+$.loadScript('https://wwmap.ru/js/trackStorage.js');
+
 function WWMapSearchProvider() {
 
 }

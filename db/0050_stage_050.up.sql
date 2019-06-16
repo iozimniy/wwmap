@@ -30,3 +30,5 @@ CREATE TRIGGER waterway_path_simplified_change_trigger
     BEFORE UPDATE OF "path_simplified" ON waterway
     FOR EACH ROW
 EXECUTE PROCEDURE path_simplified_changed();
+
+ALTER TABLE "user" ADD COLUMN experimental_features BOOLEAN NOT NULL DEFAULT FALSE;

@@ -36,7 +36,7 @@ func (this notificationStorage) Add(notifications ...Notification) error {
 		return []interface{}{notification.Title,
 			notification.Object.Id, notification.Object.Title, notification.Comment,
 			notification.Recipient.Provider, notification.Recipient.Recipient, notification.Classifier, notification.SendBefore}, nil
-	}, true, params)
+	}, true, params...)
 	return err
 }
 

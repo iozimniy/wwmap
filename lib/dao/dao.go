@@ -112,6 +112,7 @@ type UserDao interface {
 	List() ([]User, error)
 	ListByRole(role Role) ([]User, error)
 	SetRole(userId int64, role Role) (Role, Role, error)
+	SetExperimentalFeatures(userId int64, enable bool) (bool, bool, error)
 	GetBySession(sessionId string) (User, error)
 }
 

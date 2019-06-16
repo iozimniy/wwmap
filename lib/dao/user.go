@@ -11,24 +11,26 @@ import (
 
 func NewUserPostgresDao(postgresStorage PostgresStorage) UserDao {
 	return userStorage{
-		PostgresStorage:   postgresStorage,
-		createQuery:       queries.SqlQuery("user", "create"),
-		getRoleQuery:      queries.SqlQuery("user", "get-role-by-ext-id"),
-		setRoleQuery:      queries.SqlQuery("user", "set-role"),
-		listQuery:         queries.SqlQuery("user", "list"),
-		listByRoleQuery:   queries.SqlQuery("user", "list-by-role"),
-		getBySessionQuery: queries.SqlQuery("user", "find-by-session-id"),
+		PostgresStorage:                  postgresStorage,
+		createQuery:                      queries.SqlQuery("user", "create"),
+		getRoleQuery:                     queries.SqlQuery("user", "get-role-by-ext-id"),
+		setRoleQuery:                     queries.SqlQuery("user", "set-role"),
+		setExperimentalFeaturesModeQuery: queries.SqlQuery("user", "set-experimental-features-mode"),
+		listQuery:                        queries.SqlQuery("user", "list"),
+		listByRoleQuery:                  queries.SqlQuery("user", "list-by-role"),
+		getBySessionQuery:                queries.SqlQuery("user", "find-by-session-id"),
 	}
 }
 
 type userStorage struct {
 	PostgresStorage
-	createQuery       string
-	getRoleQuery      string
-	setRoleQuery      string
-	listQuery         string
-	listByRoleQuery   string
-	getBySessionQuery string
+	createQuery                      string
+	getRoleQuery                     string
+	setRoleQuery                     string
+	setExperimentalFeaturesModeQuery string
+	listQuery                        string
+	listByRoleQuery                  string
+	getBySessionQuery                string
 }
 
 func (this userStorage) CreateIfNotExists(user User) (int64, Role, string, bool, error) {
@@ -75,6 +77,17 @@ func (this userStorage) SetRole(userId int64, role Role) (Role, Role, error) {
 	return Role(*(cols[0][0].(*string))), Role(*(cols[0][1].(*string))), nil
 }
 
+func (this userStorage) SetExperimentalFeatures(userId int64, enable bool) (bool, bool, error) {
+	cols, err := this.updateReturningColumns(this.setExperimentalFeaturesModeQuery, ArrayMapper, true, []interface{}{userId, enable})
+	if err != nil {
+		return false, false, err
+	}
+	if len(cols) == 0 {
+		return false, false, fmt.Errorf("Can not update experimental features mode for user %d: user not found", userId)
+	}
+	return (*(cols[0][0].(*bool))), (*(cols[0][1].(*bool))), nil
+}
+
 func (this userStorage) GetBySession(sessionId string) (User, error) {
 	user, found, err := this.doFindAndReturn(this.getBySessionQuery, userMapper, sessionId)
 	if err != nil {
@@ -106,7 +119,7 @@ func userMapper(rows *sql.Rows) (User, error) {
 	authProvider := ""
 	sessionId := sql.NullString{}
 
-	err := rows.Scan(&user.Id, &user.ExtId, &authProvider, &user.Role, &infoStr, &sessionId)
+	err := rows.Scan(&user.Id, &user.ExtId, &authProvider, &user.Role, &infoStr, &sessionId, &user.ExperimentalFeaures)
 	if err != nil {
 		return user, err
 	}

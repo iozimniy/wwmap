@@ -321,12 +321,13 @@ func (this AuthProvider) HumanName() string {
 }
 
 type User struct {
-	Id           int64        `json:"id"`
-	ExtId        string       `json:"ext_id"`
-	AuthProvider AuthProvider `json:"auth_provider"`
-	Role         Role         `json:"role"`
-	Info         UserInfo     `json:"info"`
-	SessionId    string       `json:"session_id"`
+	Id                  int64        `json:"id"`
+	ExtId               string       `json:"ext_id"`
+	AuthProvider        AuthProvider `json:"auth_provider"`
+	Role                Role         `json:"role"`
+	Info                UserInfo     `json:"info"`
+	SessionId           string       `json:"session_id"`
+	ExperimentalFeaures bool         `json:"experimental_features"`
 }
 
 type Country struct {

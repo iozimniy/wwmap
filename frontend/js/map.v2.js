@@ -286,8 +286,10 @@ WWMap.prototype.init = function () {
     this.objectManager = objectManager;
 
     this.measurementTool = new WWMapMeasurementTool(yMap, objectManager, backendApiBase);
-    this.yMap.controls.add(createMeasurementToolControl(this.measurementTool), {
-    });
+    var info = getWwmapUserInfoForMapControls();
+    if (info && info.experimental_features) {
+        this.yMap.controls.add(createMeasurementToolControl(this.measurementTool), {});
+    }
 
     this.loadRivers(this.yMap.getBounds())
 };

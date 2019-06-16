@@ -156,7 +156,7 @@ func (this *PostgresStorage) insertReturningId(query string, args ...interface{}
 }
 
 func (this *PostgresStorage) updateReturningId(query string, mapper func(entity interface{}) ([]interface{}, error), failOnEmptyResult bool, values ...interface{}) ([]int64, error) {
-	rows, err := this.updateReturningColumns(query, mapper, failOnEmptyResult, values)
+	rows, err := this.updateReturningColumns(query, mapper, failOnEmptyResult, values...)
 	if err != nil {
 		return []int64{}, err
 	}
@@ -192,6 +192,7 @@ func (this *PostgresStorage) updateReturningColumns(query string, mapper func(en
 
 	result := make([][]interface{}, 0, len(values))
 	for _, value := range values {
+		fmt.Println("ccc", values, value)
 		args, err := mapper(value)
 		if err != nil {
 			return [][]interface{}{}, err

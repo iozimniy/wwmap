@@ -1,3 +1,10 @@
+wwmap-db (0.0.24.209) unstable; urgency=medium
+
+  * #209 Experimental features enable flag
+  * #209 First draft of route builder
+
+ -- Andrey Khomyakov <and.hom@gmail.com>  Sun, 16 Jun 2019 20:52:18 +0300
+
 wwmap-db (0.0.24) unstable; urgency=medium
 
   * #4 Change geometry constraint for spot POINT -> POINT OR LINESTRING
